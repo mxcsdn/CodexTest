@@ -10,6 +10,11 @@ const priorityOptions = [
   { value: 'low', label: '低', tone: 'priority-low' },
 ]
 
+const golfTodo = {
+  title: '预约高尔夫球运动提醒',
+  notes: '提前 30 分钟准备球杆、手套和球鞋后出门',
+}
+
 const seedTodos = [
   {
     id: crypto.randomUUID(),
@@ -23,8 +28,8 @@ const seedTodos = [
   },
   {
     id: crypto.randomUUID(),
-    title: '预约健身提醒',
-    notes: '提前 30 分钟准备出门',
+    title: golfTodo.title,
+    notes: golfTodo.notes,
     dueAt: getLocalDateTime(28),
     priority: 'medium',
     completed: false,
@@ -32,6 +37,25 @@ const seedTodos = [
     reminded: false,
   },
 ]
+
+function migrateStoredTodos(todos) {
+  if (!Array.isArray(todos)) return seedTodos
+
+  let changed = false
+  const migratedTodos = todos.map((todo) => {
+    if (todo.title !== '预约健身提醒') return todo
+
+    changed = true
+
+    return {
+      ...todo,
+      title: golfTodo.title,
+      notes: todo.notes === '提前 30 分钟准备出门' ? golfTodo.notes : todo.notes,
+    }
+  })
+
+  return changed ? migratedTodos : todos
+}
 
 function getLocalDateTime(offsetMinutes = 0) {
   const date = new Date(Date.now() + offsetMinutes * 60 * 1000)
@@ -77,7 +101,7 @@ function App() {
   const [todos, setTodos] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
-      return saved ? JSON.parse(saved) : seedTodos
+      return saved ? migrateStoredTodos(JSON.parse(saved)) : seedTodos
     } catch {
       return seedTodos
     }
