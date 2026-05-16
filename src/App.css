@@ -320,7 +320,7 @@ select:focus {
 
 .todo-item.completed {
   border-left-color: #2e9d63;
-  background: #f8fbf9;
+  background: #eaf6ff;
 }
 
 .todo-item.completed h3,

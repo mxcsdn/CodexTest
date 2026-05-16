@@ -22,7 +22,7 @@ const seedTodos = [
     notes: '把重要工作拆成可以执行的小步骤',
     dueAt: getLocalDateTime(3),
     priority: 'high',
-    completed: false,
+    completed: true,
     createdAt: Date.now(),
     reminded: false,
   },
@@ -42,16 +42,27 @@ function migrateStoredTodos(todos) {
   if (!Array.isArray(todos)) return seedTodos
 
   let changed = false
-  const migratedTodos = todos.map((todo) => {
-    if (todo.title !== '预约健身提醒') return todo
+  const migratedTodos = todos.map((todo, index) => {
+    let nextTodo = todo
 
-    changed = true
-
-    return {
-      ...todo,
-      title: golfTodo.title,
-      notes: todo.notes === '提前 30 分钟准备出门' ? golfTodo.notes : todo.notes,
+    if (todo.title === '预约健身提醒') {
+      changed = true
+      nextTodo = {
+        ...nextTodo,
+        title: golfTodo.title,
+        notes: todo.notes === '提前 30 分钟准备出门' ? golfTodo.notes : todo.notes,
+      }
     }
+
+    if (index === 0 && todo.title === '整理本周任务' && !todo.completed) {
+      changed = true
+      nextTodo = {
+        ...nextTodo,
+        completed: true,
+      }
+    }
+
+    return nextTodo
   })
 
   return changed ? migratedTodos : todos
