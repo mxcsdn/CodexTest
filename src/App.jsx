@@ -308,6 +308,15 @@ function App() {
           </div>
 
           <label>
+            <span>提醒时间</span>
+            <input
+              type="datetime-local"
+              value={form.dueAt}
+              onChange={(event) => setForm({ ...form, dueAt: event.target.value })}
+            />
+          </label>
+
+          <label>
             <span>待办标题</span>
             <input
               type="text"
@@ -326,30 +335,19 @@ function App() {
             />
           </label>
 
-          <div className="form-row">
-            <label>
-              <span>提醒时间</span>
-              <input
-                type="datetime-local"
-                value={form.dueAt}
-                onChange={(event) => setForm({ ...form, dueAt: event.target.value })}
-              />
-            </label>
-
-            <label>
-              <span>优先级</span>
-              <select
-                value={form.priority}
-                onChange={(event) => setForm({ ...form, priority: event.target.value })}
-              >
-                {priorityOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label>
+            <span>优先级</span>
+            <select
+              value={form.priority}
+              onChange={(event) => setForm({ ...form, priority: event.target.value })}
+            >
+              {priorityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
 
           <button className="primary-button" type="submit">
             添加待办
