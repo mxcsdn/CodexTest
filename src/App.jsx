@@ -30,7 +30,7 @@ const seedTodos = [
     id: crypto.randomUUID(),
     title: golfTodo.title,
     notes: golfTodo.notes,
-    dueAt: getLocalDateTime(28),
+    dueAt: getNextWeekWednesdayDateTime(15, 0),
     priority: 'medium',
     completed: false,
     createdAt: Date.now(),
@@ -70,6 +70,24 @@ function migrateStoredTodos(todos) {
 
 function getLocalDateTime(offsetMinutes = 0) {
   const date = new Date(Date.now() + offsetMinutes * 60 * 1000)
+  const timezoneOffset = date.getTimezoneOffset() * 60 * 1000
+  return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16)
+}
+
+function getNextWeekWednesdayDateTime(hour = 15, minute = 0) {
+  const now = new Date()
+  const currentDay = now.getDay()
+  const daysUntilNextMonday = ((8 - currentDay) % 7) || 7
+  const daysUntilTarget = daysUntilNextMonday + 2
+  const date = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + daysUntilTarget,
+    hour,
+    minute,
+    0,
+    0,
+  )
   const timezoneOffset = date.getTimezoneOffset() * 60 * 1000
   return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16)
 }
