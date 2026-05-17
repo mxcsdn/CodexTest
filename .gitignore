@@ -22,6 +22,16 @@ coverage
 .vite
 .cache
 .eslintcache
+.venv
+__pycache__
+*.py[cod]
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Python build artifacts
+build/
+*.egg-info/
 
 # Editor directories and files
 .vscode/*

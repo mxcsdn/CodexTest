@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  createTodo,
+  deleteTodo as deleteCloudTodo,
+  fetchTodos,
+  postponeTodo as postponeCloudTodo,
+  syncTodos,
+  updateTodo,
+} from './api'
 import './App.css'
 
 const STORAGE_KEY = 'todo-reminder-items'
 const INITIAL_NOW = Date.now()
+const SYNCED_STORAGE_KEY = `${STORAGE_KEY}-cloud-synced`
 
 const priorityOptions = [
   { value: 'high', label: '高', tone: 'priority-high' },
@@ -17,7 +26,7 @@ const golfTodo = {
 
 const seedTodos = [
   {
-    id: crypto.randomUUID(),
+    id: '11111111-1111-4111-8111-111111111111',
     title: '整理本周任务',
     notes: '把重要工作拆成可以执行的小步骤',
     dueAt: getLocalDateTime(3),
@@ -27,7 +36,7 @@ const seedTodos = [
     reminded: false,
   },
   {
-    id: crypto.randomUUID(),
+    id: '22222222-2222-4222-8222-222222222222',
     title: golfTodo.title,
     notes: golfTodo.notes,
     dueAt: getSpecificLocalDateTime(5, 20, 9, 30),
@@ -134,6 +143,7 @@ function App() {
   const [query, setQuery] = useState('')
   const [now, setNow] = useState(INITIAL_NOW)
   const [toast, setToast] = useState('')
+  const [isCloudReady, setIsCloudReady] = useState(false)
   const todosRef = useRef(todos)
 
   useEffect(() => {
@@ -145,7 +155,36 @@ function App() {
   }, [todos])
 
   useEffect(() => {
-    const tick = () => {
+    let ignore = false
+
+    async function loadCloudTodos() {
+      try {
+        const localTodos = todosRef.current
+        const hasSynced = localStorage.getItem(SYNCED_STORAGE_KEY) === 'true'
+        const cloudTodos = hasSynced ? await fetchTodos() : await syncTodos(localTodos)
+
+        if (ignore) return
+
+        setTodos(cloudTodos.length > 0 ? cloudTodos : localTodos)
+        localStorage.setItem(SYNCED_STORAGE_KEY, 'true')
+        setIsCloudReady(true)
+      } catch (error) {
+        if (ignore) return
+
+        setIsCloudReady(false)
+        setToast(`云端同步失败：${error.message}`)
+      }
+    }
+
+    loadCloudTodos()
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
+  useEffect(() => {
+    const tick = async () => {
       const currentTime = Date.now()
       setNow(currentTime)
 
@@ -157,11 +196,21 @@ function App() {
       if (dueTodos.length === 0) return
 
       const dueIds = new Set(dueTodos.map((todo) => todo.id))
+      const previousTodos = todosRef.current
       setTodos((currentTodos) =>
         currentTodos.map((todo) =>
           dueIds.has(todo.id) ? { ...todo, reminded: true } : todo,
         ),
       )
+
+      try {
+        await Promise.all(dueTodos.map((todo) => updateTodo(todo.id, { reminded: true })))
+      } catch (error) {
+        setTodos(previousTodos)
+        setToast(`云端提醒状态更新失败：${error.message}`)
+        return
+      }
+
       setToast(`${dueTodos[0].title} 已到提醒时间`)
 
       if ('Notification' in window && Notification.permission === 'granted') {
@@ -223,7 +272,7 @@ function App() {
       .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())[0]
   }, [todos])
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
 
     const title = form.title.trim()
@@ -243,14 +292,27 @@ function App() {
       reminded: false,
     }
 
+    const previousTodos = todos
     setTodos((currentTodos) => [todo, ...currentTodos])
-    setForm({
-      title: '',
-      notes: '',
-      dueAt: getLocalDateTime(60),
-      priority: 'medium',
-    })
-    setToast('已添加待办')
+
+    try {
+      const savedTodo = await createTodo(todo)
+      setTodos((currentTodos) =>
+        currentTodos.map((currentTodo) => (currentTodo.id === todo.id ? savedTodo : currentTodo)),
+      )
+      setForm({
+        title: '',
+        notes: '',
+        dueAt: getLocalDateTime(60),
+        priority: 'medium',
+      })
+      setIsCloudReady(true)
+      setToast('已添加待办并写入云端')
+    } catch (error) {
+      setTodos(previousTodos)
+      setIsCloudReady(false)
+      setToast(`云端写入失败：${error.message}`)
+    }
   }
 
   function requestNotificationPermission() {
@@ -264,27 +326,71 @@ function App() {
     })
   }
 
-  function toggleTodo(id) {
+  async function toggleTodo(id) {
+    const todo = todos.find((item) => item.id === id)
+    if (!todo) return
+
+    const nextCompleted = !todo.completed
+    const previousTodos = todos
+
     setTodos((currentTodos) =>
       currentTodos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo,
+        todo.id === id ? { ...todo, completed: nextCompleted } : todo,
       ),
     )
+
+    try {
+      const savedTodo = await updateTodo(id, { completed: nextCompleted })
+      setTodos((currentTodos) =>
+        currentTodos.map((currentTodo) => (currentTodo.id === id ? savedTodo : currentTodo)),
+      )
+      setIsCloudReady(true)
+    } catch (error) {
+      setTodos(previousTodos)
+      setIsCloudReady(false)
+      setToast(`云端状态更新失败：${error.message}`)
+    }
   }
 
-  function deleteTodo(id) {
+  async function deleteTodo(id) {
+    const previousTodos = todos
     setTodos((currentTodos) => currentTodos.filter((todo) => todo.id !== id))
+
+    try {
+      await deleteCloudTodo(id)
+      setIsCloudReady(true)
+      setToast('已从云端删除')
+    } catch (error) {
+      setTodos(previousTodos)
+      setIsCloudReady(false)
+      setToast(`云端删除失败：${error.message}`)
+    }
   }
 
-  function postponeTodo(id, minutes) {
+  async function postponeTodo(id, minutes) {
+    const previousTodos = todos
+    const fallbackDueAt = getLocalDateTime(minutes)
+
     setTodos((currentTodos) =>
       currentTodos.map((todo) =>
         todo.id === id
-          ? { ...todo, dueAt: getLocalDateTime(minutes), reminded: false }
+          ? { ...todo, dueAt: fallbackDueAt, reminded: false }
           : todo,
       ),
     )
-    setToast(`已推迟 ${minutes} 分钟`)
+
+    try {
+      const savedTodo = await postponeCloudTodo(id, minutes)
+      setTodos((currentTodos) =>
+        currentTodos.map((currentTodo) => (currentTodo.id === id ? savedTodo : currentTodo)),
+      )
+      setIsCloudReady(true)
+      setToast(`已推迟 ${minutes} 分钟并写入云端`)
+    } catch (error) {
+      setTodos(previousTodos)
+      setIsCloudReady(false)
+      setToast(`云端推迟失败：${error.message}`)
+    }
   }
 
   return (
@@ -294,7 +400,12 @@ function App() {
           <p className="eyebrow">Todo Reminder</p>
           <h1>待办事项提醒</h1>
         </div>
-        <button className="ghost-button" type="button" onClick={requestNotificationPermission}>
+        <button
+          className="ghost-button"
+          type="button"
+          aria-label={isCloudReady ? '开启系统通知，云端已连接' : '开启系统通知，云端未连接'}
+          onClick={requestNotificationPermission}
+        >
           开启系统通知
         </button>
       </section>
